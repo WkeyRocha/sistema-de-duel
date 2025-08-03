@@ -1,0 +1,110 @@
+local DuelStartPart = game.Workspace:WaitForChild("DuelStartPart")
+local playersInDuel = {}
+local votes = {map1 = 0, map2 = 0}
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local Players = game:GetService("Players")
+
+local StartDuel = ReplicatedStorage:WaitForChild("StartDuel")
+local ShowMapSelect = ReplicatedStorage:WaitForChild("ShowMapSelect")
+local SelectMap = ReplicatedStorage:WaitForChild("SelectMap")
+local TeleportPlayers = ReplicatedStorage:WaitForChild("TeleportPlayers")
+
+DuelStartPart.CanCollide = false
+
+local function checkPlayers()
+	local touchingParts = DuelStartPart:GetTouchingParts()
+	local playersTouching = {}
+	for _, part in pairs(touchingParts) do
+		local humanoid = part.Parent:FindFirstChild("Humanoid")
+		if humanoid then
+			local player = Players:GetPlayerFromCharacter(part.Parent)
+			if player and not table.find(playersTouching, player) then
+				table.insert(playersTouching, player)
+				print("Jogador detectado por GetTouchingParts:", player.Name, "UserId:", player.UserId)
+			end
+		end
+	end
+
+	local partSize = DuelStartPart.Size
+	local partPosition = DuelStartPart.Position
+	local region = Region3.new(
+		partPosition - (partSize / 2),
+		partPosition + (partSize / 2)
+	)
+	local regionParts = workspace:FindPartsInRegion3WithIgnoreList(region, {DuelStartPart}, 100)
+	for _, part in pairs(regionParts) do
+		local humanoid = part.Parent:FindFirstChild("Humanoid")
+		if humanoid then
+			local player = Players:GetPlayerFromCharacter(part.Parent)
+			if player and not table.find(playersTouching, player) then
+				table.insert(playersTouching, player)
+				print("Jogador detectado por Region3:", player.Name, "UserId:", player.UserId)
+			end
+		end
+	end
+
+	print("Jogadores tocando (total):", #playersTouching)
+	if #playersTouching >= 2 and #playersInDuel < 2 then
+		playersInDuel = playersTouching
+		if #playersInDuel == 2 then
+			print("Dois jogadores detectados, iniciando duelo!")
+			local playerIds = {playersInDuel[1].UserId, playersInDuel[2].UserId}
+			print("UserIds enviados:", table.concat(playerIds, ", "))
+			local success = pcall(function()
+				StartDuel:FireAllClients(playersInDuel, playerIds)
+			end)
+			if not success then
+				print("Erro ao disparar StartDuel:", success)
+			end
+			wait(5)
+			ShowMapSelect:FireAllClients(playersInDuel)
+			votes.map1 = 0
+			votes.map2 = 0
+		end
+	elseif #playersTouching < 2 then
+		playersInDuel = {}
+	end
+end
+
+while wait(0.1) do
+	checkPlayers()
+end
+
+SelectMap.OnServerEvent:Connect(function(player, mapChoice)
+	if playersInDuel[1] == player or playersInDuel[2] == player then
+		if mapChoice == 1 then
+			votes.map1 = votes.map1 + 1
+			print(player.Name, "votou em Mapa 1, votos:", votes.map1, votes.map2)
+		elseif mapChoice == 2 then
+			votes.map2 = votes.map2 + 1
+			print(player.Name, "votou em Mapa 2, votos:", votes.map1, votes.map2)
+		end
+		if votes.map1 + votes.map2 == 2 then
+			local chosenMap = math.random(1, 2)
+			if votes.map1 > votes.map2 then
+				chosenMap = 1
+				print("Mapa 1 escolhido por maioria")
+			elseif votes.map2 > votes.map1 then
+				chosenMap = 2
+				print("Mapa 2 escolhido por maioria")
+			else
+				print("Empate, escolhendo aleatoriamente:", chosenMap)
+			end
+			print("Disparando TeleportPlayers com mapa:", chosenMap)
+			TeleportPlayers:FireAllClients(playersInDuel, chosenMap)
+			if chosenMap == 1 then
+				playersInDuel[1].Character:MoveTo(workspace:WaitForChild("Player1Map1").Position)
+				playersInDuel[2].Character:MoveTo(workspace:WaitForChild("Player2Map1").Position)
+				print("Teletransportando para Mapa 1")
+			else
+				playersInDuel[1].Character:MoveTo(workspace:WaitForChild("Player1Map2").Position)
+				playersInDuel[2].Character:MoveTo(workspace:WaitForChild("Player2Map2").Position)
+				print("Teletransportando para Mapa 2")
+			end
+			playersInDuel = {}
+			votes.map1 = 0
+			votes.map2 = 0
+		end
+	end
+end)
