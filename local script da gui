@@ -1,0 +1,84 @@
+local gui = script.Parent
+local countdownFrame = gui:WaitForChild("CountdownFrame")
+local mapSelectFrame = gui:WaitForChild("MapSelectFrame")
+local player1Image = countdownFrame:WaitForChild("Player1Image")
+local player2Image = countdownFrame:WaitForChild("Player2Image")
+local countdownText = countdownFrame:WaitForChild("CountdownText")
+local map1Button = mapSelectFrame:WaitForChild("Map1Button")
+local map2Button = mapSelectFrame:WaitForChild("Map2Button")
+local plr = game.Players.LocalPlayer
+local TweenService = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local HttpService = game:GetService("HttpService")
+
+print("LocalScript iniciado para:", plr.Name)
+gui.Enabled = false
+countdownFrame.Position = UDim2.new(0.5, 0, -0.5, 0)
+countdownFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+mapSelectFrame.Position = UDim2.new(0.5, 0, -0.5, 0)
+mapSelectFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+player1Image.Transparency = 0
+player2Image.Transparency = 0
+
+local function getAvatarThumbnail(userId)
+	print("Tentando carregar thumbnail para UserId:", userId)
+	local url = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. userId .. "&width=420&height=420&format=png"
+	local success, result = pcall(function()
+		return HttpService:GetAsync(url)
+	end)
+	if success then
+		print("Thumbnail carregada para UserId:", userId)
+		return url
+	else
+		warn("Falha ao carregar thumbnail para UserId:", userId)
+		return "rbxassetid://123456789"
+	end
+end
+
+ReplicatedStorage:WaitForChild("StartDuel").OnClientEvent:Connect(function(players, playerIds)
+	print("Evento StartDuel recebido por:", plr.Name, "Jogadores:", #players, "UserIds:", table.concat(playerIds, ", "))
+	if table.find(players, plr) then
+		gui.Enabled = true
+		local tweenIn = TweenService:Create(
+			countdownFrame,
+			TweenInfo.new(1.5, Enum.EasingStyle.Cubic, Enum.EasingDirection.InOut),
+			{Position = UDim2.new(0.5, 0, 0.5, 0)}
+		)
+		tweenIn:Play()
+		player1Image.Image = getAvatarThumbnail(playerIds[1])
+		player2Image.Image = getAvatarThumbnail(playerIds[2])
+		for i = 5, 1, -1 do
+			countdownText.Text = tostring(i)
+			wait(1)
+		end
+		countdownText.Text = "0"
+	end
+end)
+
+ReplicatedStorage:WaitForChild("ShowMapSelect").OnClientEvent:Connect(function(players)
+	print("Evento ShowMapSelect recebido por:", plr.Name, "Jogadores:", #players)
+	if table.find(players, plr) then
+		countdownFrame.Visible = false
+		local tweenIn = TweenService:Create(
+			mapSelectFrame,
+			TweenInfo.new(1.5, Enum.EasingStyle.Cubic, Enum.EasingDirection.InOut),
+			{Position = UDim2.new(0.5, 0, 0.5, 0)}
+		)
+		tweenIn:Play()
+	end
+end)
+
+map1Button.MouseButton1Click:Connect(function()
+	ReplicatedStorage:WaitForChild("SelectMap"):FireServer(1)
+end)
+
+map2Button.MouseButton1Click:Connect(function()
+	ReplicatedStorage:WaitForChild("SelectMap"):FireServer(2)
+end)
+
+ReplicatedStorage:WaitForChild("TeleportPlayers").OnClientEvent:Connect(function(players, chosenMap)
+	print("Evento TeleportPlayers recebido por:", plr.Name, "Mapa escolhido:", chosenMap)
+	if table.find(players, plr) then
+		gui.Enabled = false
+	end
+end)
